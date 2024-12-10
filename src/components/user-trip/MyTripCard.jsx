@@ -1,3 +1,5 @@
+// src/components/user-trip/MyTripCard.jsx
+
 import { getPlaceDetails, PHOTO_REF_URL } from "@/service/globalApi";
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";

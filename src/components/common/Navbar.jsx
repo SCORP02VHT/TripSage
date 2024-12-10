@@ -1,117 +1,129 @@
-import React, { useState } from "react";
-import { Button } from "../ui/button";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { googleLogout, useGoogleLogin } from "@react-oauth/google";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { FcGoogle } from "react-icons/fc";
-import axios from "axios";
+import React, { useState, useEffect } from "react";  
+import { Button } from "@/components/ui/button";  
+import { Link, useNavigate, useLocation } from "react-router-dom";  
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";  
+import { Home, Globe2, PlusCircle, User, MapPin, Bookmark, Settings, LogOut } from "lucide-react";  
+import { auth, onAuthStateChanged, signOut } from "@/service/firebaseConfig";  
+import { toast } from "sonner";  
+import AuthDialog from "./AuthDialog";  // Import the new AuthDialog component  
 
-export const Navbar = () => {
-  const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user"));
-  const [openDailog, setOpenDailog] = useState(false);
+export const Navbar = () => {  
+  const navigate = useNavigate();  
+  const location = useLocation();  
+  const [user, setUser] = useState(null);  
+  const [imageError, setImageError] = useState(false);  
 
-  const handleLogin = useGoogleLogin({
-    onSuccess: (response) => GetUserProfile(response),
-    onError: (error) => console.log(error),
-  });
+  useEffect(() => {  
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {  
+      setUser(currentUser);  
+      setImageError(false);  
+    });  
 
-  const GetUserProfile = (tokenInfo) => {
-    console.log(tokenInfo);
-    axios
-      .get(
-        `https://www.googleapis.com/oauth2/v1/userinfo?access_token=${tokenInfo?.access_token}`,
-        {
-          headers: {
-            Authorization: `Bearer ${tokenInfo?.access_token}`,
-            Accept: "Application/json",
-          },
-        }
-      )
-      .then((response) => {
-        console.log(response);
-        localStorage.setItem("user", JSON.stringify(response.data));
-        setOpenDailog(false);
-        window.location.reload();
-        // generateTrip();
-      });
-  };
+    return () => unsubscribe();  
+  }, []);  
 
-  return (
-    <div className="p-3 shadow-sm flex justify-between items-center px-5">
-      <Link to={"/"}>
-        <img src="/mainlogo.png" className="w-28 md:w-40" />
-      </Link>
-      <div>
-        {user ? (
-          <div className="flex justify-center items-center gap-1 md:gap-3">
-            <Link to={"/create-trip"}>
-              <Button variant="outline" className="rounded-full">
-                Create Trips
-              </Button>
-            </Link>
-            <Link to={"/my-trips"}>
-              <Button variant="outline" className="rounded-full">
-                My Trips
-              </Button>
-            </Link>
-            <Popover>
-              <PopoverTrigger>
-                <img
-                  src={user?.picture}
-                  className="rounded-full h-[35px] w-[35px]"
-                />
-              </PopoverTrigger>
-              <PopoverContent className="w-48 hover:bg-gray-100 cursor-pointer">
-                <h2
-                  onClick={() => {
-                    googleLogout();
-                    localStorage.clear();
-                    navigate("/");
-                  }}
-                >
-                  Logout
-                </h2>
-              </PopoverContent>
-            </Popover>
-          </div>
-        ) : (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>Sign In</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogDescription>
-                  <img src="/mainlogo.png" className="w-28 md:w-40" />
-                  <h2 className="font-bold text-lg mt-7">
-                    Sign In with Google
-                  </h2>
-                  <p> Sign In to the App with Google authentication </p>
-                  <Button
-                    className="w-full mt-5 flex items-center gap-2 "
-                    onClick={handleLogin}
-                  >
-                    <FcGoogle className="h-5 w-5" /> Sign In with Google
-                  </Button>
-                </DialogDescription>
-              </DialogHeader>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
-    </div>
-  );
+  const getProfileImage = (user) => {  
+    if (!imageError && user?.photoURL) {  
+      return user.photoURL;  
+    }  
+    return "/default-avatar.jpg";  
+  };  
+
+  const handleLogout = async () => {  
+    try {  
+      await signOut(auth);  
+      toast.success("Logged out successfully");  
+      navigate("/");  
+    } catch (error) {  
+      console.error(error);  
+      toast.error("Failed to log out");  
+    }  
+  };  
+
+  const navLinks = [  
+    { path: "/", label: "Home", icon: Home },  
+    { path: "/community", label: "Community", icon: Globe2 },  
+  ];  
+
+  const userMenuLinks = [  
+    { path: "/profile", label: "Profile", icon: User },  
+    { path: "/my-trips", label: "My Trips", icon: MapPin },  
+    { path: "/saved-trips", label: "Saved Trips", icon: Bookmark },  
+    { path: "/settings", label: "Settings", icon: Settings },  
+  ];  
+
+  const isActivePath = (path) => location.pathname === path;  
+
+  return (  
+    <nav className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">  
+      <div className="container flex h-16 items-center justify-between">  
+        <div className="flex items-center gap-6">  
+          <Link to="/">  
+            <img src="/TripSage.png" alt="TripSage Logo" className="h-8 w-auto" />  
+          </Link>  
+          <div className="hidden md:flex items-center gap-1">  
+            {navLinks.map(({ path, label, icon: Icon }) => (  
+              <Link key={path} to={path}>  
+                <Button variant={isActivePath(path) ? "default" : "ghost"} className="flex items-center gap-2">  
+                  <Icon className="h-4 w-4" />  
+                  {label}  
+                </Button>  
+              </Link>  
+            ))}  
+          </div>  
+        </div>  
+
+        <div className="flex items-center gap-4">  
+          {user ? (  
+            <>  
+              <Link to="/create-trip">  
+                <Button className="hidden md:flex items-center gap-2">  
+                  <PlusCircle className="h-4 w-4" />  
+                  Create Trip  
+                </Button>  
+              </Link>  
+              <Popover>  
+                <PopoverTrigger asChild>  
+                  {/* Updated to Button for consistency */}  
+                  <Button variant="ghost" className="flex items-center gap-2">  
+                    <User className="h-4 w-4" />  
+                    Profile  
+                  </Button>  
+                </PopoverTrigger>  
+                <PopoverContent className="w-56 mt-5" align="center">  
+                  <div className="space-y-1">  
+                    <div className="flex items-center gap-2 border-b pb-2">  
+                      <img  
+                        src={getProfileImage(user)}  
+                        alt="Profile"  
+                        className="h-8 w-8 rounded-full object-cover"  
+                      />  
+                      <div className="flex-1 overflow-hidden">  
+                        <p className="text-sm font-medium truncate">{user.displayName || user.email}</p>  
+                        <p className="text-xs text-gray-500 truncate">{user.email}</p>  
+                      </div>  
+                    </div>  
+                    {userMenuLinks.map(({ path, label, icon: Icon }) => (  
+                      <Link key={path} to={path}>  
+                        <Button variant={isActivePath(path) ? "default" : "ghost"} className="w-full justify-start gap-2 text-sm">  
+                          <Icon className="h-4 w-4" />  
+                          {label}  
+                        </Button>  
+                      </Link>  
+                    ))}  
+                    <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50" onClick={handleLogout}>  
+                      <LogOut className="h-4 w-4" />  
+                      Log Out  
+                    </Button>  
+                  </div>  
+                </PopoverContent>  
+              </Popover>  
+            </>  
+          ) : (  
+            <AuthDialog />  
+          )}  
+        </div>  
+      </div>  
+    </nav>  
+  );  
 };

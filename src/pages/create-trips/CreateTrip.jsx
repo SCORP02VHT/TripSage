@@ -19,19 +19,41 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FcGoogle } from "react-icons/fc";
-import { useGoogleLogin } from "@react-oauth/google";
+import { useNavigate } from "react-router-dom";
+import { GoogleAuthProvider, signInWithPopup, auth } from "@/service/firebaseConfig";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import axios from "axios";
+import { Loading } from "@/components/common/Loading";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/service/firebaseConfig";
-import { Loading } from "@/components/common/Loading";
-import { useNavigate } from "react-router-dom";
 
 export const CreateTrip = () => {
   const navigate = useNavigate();
   const [place, setPlace] = useState();
-  const [formData, setFormData] = useState([]);
+  const [formData, setFormData] = useState({
+    noOfDays: 1,
+    budget: "",
+    traveller: "",
+    rating: 1, // Default rating to 1 star
+    isPublic: false, // Default to private
+    viewCount: 0, // Start with zero views
+    likes: 0, // Start with zero likes
+  });
   const [openDialog, setOpenDialog] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUser(user);
+        setOpenDialog(false);
+      } else {
+        setOpenDialog(true);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleInputChange = (name, value) => {
     setFormData({
@@ -40,34 +62,21 @@ export const CreateTrip = () => {
     });
   };
 
-  useEffect(() => {
-    console.log(formData);
-  }, [formData]);
-
-  const handleLogin = useGoogleLogin({
-    onSuccess: (response) => GetUserProfile(response),
-    onError: (error) => console.log(error),
-  });
-
   const generateTrip = async () => {
-    let errorMessage = "";
-
-    const user = localStorage.getItem("user");
     if (!user) {
       setOpenDialog(true);
       return;
     }
-
+    
+    let errorMessage = "";
     if (formData?.noOfDays > 5 || formData?.noOfDays <= 0) {
       errorMessage = "Number of days should be between 1 and 5.";
-    } else {
-      if (!formData?.location) {
-        errorMessage = "Location is required.";
-      } else if (!formData?.budget) {
-        errorMessage = "Budget is required.";
-      } else if (!formData?.traveller) {
-        errorMessage = "Traveller details are required.";
-      }
+    } else if (!formData?.location) {
+      errorMessage = "Location is required.";
+    } else if (!formData?.budget) {
+      errorMessage = "Budget is required.";
+    } else if (!formData?.traveller) {
+      errorMessage = "Traveller details are required.";
     }
 
     if (errorMessage) {
@@ -76,20 +85,15 @@ export const CreateTrip = () => {
     }
 
     setLoading(true);
-
     const FINAL_PROMPT = AI_PROMPT.replace(
-      "{location}",
-      formData?.location?.label
-    )
-      .replace("{totalDays}", formData?.noOfDays)
-      .replace("{traveler}", formData?.traveller)
-      .replace("{budget}", formData?.budget)
-      .replace("{totalDays}", formData?.noOfDays);
+      "{location}", formData?.location?.label
+    ).replace("{totalDays}", formData?.noOfDays)
+     .replace("{traveler}", formData?.traveller)
+     .replace("{budget}", formData?.budget)
+     .replace("{totalDays}", formData?.noOfDays);
 
     try {
-      console.log(FINAL_PROMPT, "prompt");
       const result = await chatSession.sendMessage(FINAL_PROMPT);
-      console.log(result, "Final");
       saveTrip(result?.response?.text());
     } catch (error) {
       console.error("Error sending message:", error);
@@ -101,13 +105,10 @@ export const CreateTrip = () => {
 
   const saveTrip = async (tripData) => {
     setLoading(true);
-
     const docId = Date.now().toString();
-    const user = JSON.parse(localStorage.getItem("user"));
-
     let parsedTripData;
+
     try {
-      console.log(tripData);
       parsedTripData = JSON.parse(tripData);
       if (Array.isArray(parsedTripData) && Array.isArray(parsedTripData[0])) {
         parsedTripData = {
@@ -127,49 +128,74 @@ export const CreateTrip = () => {
         userSelection: formData,
         tripData: parsedTripData,
         userEmail: user?.email,
+        userId: user?.uid,
         id: docId,
+        isPublic: formData.isPublic,
+        viewCount: formData.viewCount,
+        likes: formData.likes,
+        rating: formData.rating,
+        status: 'active',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       });
+
+      const userTripsRef = doc(db, "users", user.uid);
+      await setDoc(userTripsRef, {
+        trips: {
+          [docId]: {
+            tripId: docId,
+            createdAt: Date.now(),
+            isPublic: formData.isPublic
+          }
+        }
+      }, { merge: true });
+
       setLoading(false);
       navigate(`/view-trip/${docId}`);
+      toast.success("Trip created successfully!");
     } catch (error) {
       setLoading(false);
       console.error("Error saving trip:", error);
-      toast("An error occurred while saving the trip.");
+      toast.error("An error occurred while saving the trip.");
     }
   };
 
-  const GetUserProfile = (tokenInfo) => {
-    console.log(tokenInfo);
-    axios
-      .get(
-        `https://www.googleapis.com/oauth2/v1/userinfo?access_token=${tokenInfo?.access_token}`,
-        {
-          headers: {
-            Authorization: `Bearer ${tokenInfo?.access_token}`,
-            Accept: "Application/json",
-          },
-        }
-      )
-      .then((response) => {
-        console.log(response);
-        localStorage.setItem("user", JSON.stringify(response.data));
-        setOpenDialog(false);
-        generateTrip();
-      });
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      localStorage.setItem("user", JSON.stringify(user));
+      setUser(user);
+      setOpenDialog(false);
+      generateTrip();
+    } catch (error) {
+      console.error(error);
+      toast("An error occurred during login.");
+    }
   };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.removeItem("user");
+      setUser(null);
+      setOpenDialog(true);
+    } catch (error) {
+      console.error(error);
+      toast("An error occurred during logout.");
+    }
+  };
+
   return (
     <>
-      <Navbar />
       <div className="sm:px-10 md:px-32 lg:px-56 xl:px-72 px-5 mt-10">
-        <h2 className="font-bold text-3xl">
-          Tell us your travel preferences ⛱️ 🌴{" "}
-        </h2>
+        <h2 className="font-bold text-3xl">Tell us your travel preferences ⛱️ 🌴 </h2>
         <p className="mt-3 text-gray-500 text-xl">
-          Just provide some basic information, and our trip planner will
+          Just provide some basic information, and our TripSage will
           generate a customized itinerary based on your preferences.
         </p>
 
-        <div className="mt-10 flex flex-col gap-10">
+        <div className="mt-5 flex flex-col gap-10">
           <div>
             <h2 className="text-xl my-3 font-medium">
               What is destination of choice? *️
@@ -187,12 +213,14 @@ export const CreateTrip = () => {
           </div>
 
           <div>
-            <h2 className="text-xl my-3 font-medium">
+            <h2 className="text-xl my-3 mt-0 font-medium">
               How many days are you planning your trip? *️
             </h2>
             <Input
               placeholder={"Ex.3"}
               type="number"
+              min="1"
+              max="5"
               onChange={(e) => handleInputChange("noOfDays", e.target.value)}
             />
           </div>
@@ -225,10 +253,8 @@ export const CreateTrip = () => {
               <div
                 key={index}
                 className={`p-4 border cursor-pointer rounded-lg hover:shadow-lg
-                  ${
-                    formData?.traveller === item.people &&
-                    "shadow-lg border-black"
-                  }`}
+                  ${formData?.traveller === item.people &&
+                    "shadow-lg border-black"}`}
                 onClick={() => handleInputChange("traveller", item.people)}
               >
                 <h2 className="text-4xl">{item.icon}</h2>
@@ -238,7 +264,7 @@ export const CreateTrip = () => {
             ))}
           </div>
         </div>
-        <div className="my-10 flex justify-center">
+        <div className="my-5 flex justify-center">
           <Button onClick={generateTrip} disabled={loading}>
             Generate Trip {loading && <Loading />}
           </Button>
@@ -247,11 +273,11 @@ export const CreateTrip = () => {
           <DialogContent>
             <DialogHeader>
               <DialogDescription>
-                <img src="/mainlogo.png" className="w-28 md:w-40" />
+                <img src="/TripSage.png" className="w-28 md:w-40" />
                 <h2 className="font-bold text-lg mt-7">Sign In with Google</h2>
-                <p> Sign In to the App with Google authentication </p>
+                <p>Sign In to the App with Google authentication</p>
                 <Button
-                  className="w-full mt-5 flex items-center gap-2 "
+                  className="w-full mt-5 flex items-center gap-2"
                   onClick={handleLogin}
                 >
                   <FcGoogle className="h-5 w-5" /> Sign In with Google

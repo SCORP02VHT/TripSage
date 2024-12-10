@@ -1,23 +1,23 @@
-// Import the functions you need from the SDKs you need
+// src/service/firebaseConfig.jsx
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import {getFirestore} from "firebase/firestore"
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_AUTH_API_KEY,
-  authDomain: "mini-project-63b10.firebaseapp.com",
-  projectId: "mini-project-63b10",
-  storageBucket: "mini-project-63b10.appspot.com",
-  messagingSenderId: "651692262511",
-  appId: "1:651692262511:web:2b7f7b05410961df16799a",
-  measurementId: "G-TPPNY3SDBV"
+  apiKey: "AIzaSyDkUF0ePQrSFuOqZNv77DMXK-_gbVX4oTQ",
+  authDomain: "tripsage-99f74.firebaseapp.com",
+  projectId: "tripsage-99f74",
+  storageBucket: "tripsage-99f74.firebasestorage.app",
+  messagingSenderId: "1051034295661",
+  appId: "1:1051034295661:web:a1bc58101f150804340e64",
+  measurementId: "G-EBZKY56FP1"
 };
 
 // Initialize Firebase
-export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app)
-// const analytics = getAnalytics(app);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+// Initialize Firestore
+const db = getFirestore(app);
+
+// Correctly export GoogleAuthProvider and related functions
+export { auth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, db, onAuthStateChanged };

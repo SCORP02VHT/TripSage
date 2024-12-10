@@ -1,38 +1,54 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "../ui/button";
 import { IoIosSend } from "react-icons/io";
-import { getPlaceDetails, PHOTO_REF_URL } from "@/service/globalApi";
+import { db } from "@/service/firebaseConfig"; // Firebase Firestore import
+import { doc, getDoc } from "firebase/firestore";
 
 export const InfoSection = ({ trip }) => {
-  const [photoUrl, setPhotoUrl] = useState();
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [error, setError] = useState(null);
+
   const GetPlacePhoto = async () => {
-    const data = {
-      textQuery: trip?.userSelection?.location?.label,
-    };
-    const result = await getPlaceDetails(data).then((response) => {
-      console.log(response.data.places[0].photos[3].name);
-      const photoUrl = PHOTO_REF_URL.replace(
-        "{NAME}",
-        response.data.places[0].photos[3].name
-      );
-      setPhotoUrl(photoUrl);
-    });
+    try {
+      const locationRef = doc(db, "locations", trip?.userSelection?.location?.id); // Adjust Firestore reference
+      const locationDoc = await getDoc(locationRef);
+      if (locationDoc.exists()) {
+        const locationData = locationDoc.data();
+        const imageUrl = locationData?.photos?.[0] || "/placeholder.jpg"; // Fallback if no photo available
+        console.log("Image URL fetched from Firestore:", imageUrl);
+        setPhotoUrl(imageUrl);
+      } else {
+        setError("Location data not found.");
+      }
+    } catch (err) {
+      console.error("Error fetching location photo:", err);
+      setError("Failed to load location photo.");
+    }
   };
+
   useEffect(() => {
-    trip && GetPlacePhoto();
+    if (trip) {
+      GetPlacePhoto();
+    }
   }, [trip]);
+
   return (
     <div>
-      <img
-        src={photoUrl}
-        className="h-[300px] w-full object-cover rounded-xl"
-      />
+      {error ? (
+        <div className="text-red-500">{error}</div>
+      ) : (
+        <img
+          src={photoUrl || "/placeholder.jpg"}
+          className="h-[300px] w-full object-cover rounded-xl"
+          alt="Location"
+        />
+      )}
       <div className="flex justify-between items-center">
         <div className="my-5 flex flex-col gap-2">
           <h2 className="font-bold text-2xl">
             {trip?.userSelection?.location?.label}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3  ">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
             <h2 className="p-1 px-1 md:px-3 bg-gray-200 rounded-full text-gray-500">
               📅 {trip?.userSelection?.noOfDays} Days
             </h2>

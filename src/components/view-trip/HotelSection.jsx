@@ -9,7 +9,11 @@ export const HotelSection = ({ trip }) => {
       <h2 className="font-bold text-xl my-5">Hotel Recommendation</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5 ">
         {trip?.tripData?.hotels?.map((item, index) => (
-          <HotelCard item={item} index={index}/>
+          <HotelCard 
+            key={item?.HotelName || index}  // Use a unique key here, like HotelName or index if unique
+            item={item} 
+            index={index}
+          />
         ))}
       </div>
     </div>
